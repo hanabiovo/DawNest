@@ -1,4 +1,4 @@
-const SHELL = 'yachao-shell-v2';
+const SHELL = 'yachao-shell-v3';
 const SHARE = 'yachao-share';
 const FILES = ['./', './index.html', './manifest.webmanifest', './icon-192.png?v=3', './icon-512.png?v=3', './icon-maskable-512.png?v=3', './apple-touch-icon.png?v=3'];
 

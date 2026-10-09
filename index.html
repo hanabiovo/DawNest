@@ -57,6 +57,9 @@ input,select{width:100%;font:inherit;color:var(--fg);background:var(--bg);border
   background:var(--eye);color:#152238;padding:8px 16px;border-radius:20px;font-size:14px;opacity:0;
   transition:.2s;pointer-events:none;z-index:9}
 #toast.on{opacity:1;transform:translateX(-50%)}
+details{margin-top:10px}
+summary{font-size:13px;color:var(--mute);cursor:pointer;padding:4px 0}
+#detect.ok{color:var(--ok)}#detect.bad{color:var(--bad)}
 .hidden{display:none!important}
 </style>
 </head>
@@ -68,16 +71,20 @@ input,select{width:100%;font:inherit;color:var(--fg);background:var(--bg);border
   </header>
 
   <section class="card hidden" id="cfg">
-    <div class="row">
-      <div><label>用户名 / 组织</label><input id="owner" autocapitalize="off" autocomplete="off"></div>
-      <div><label>仓库</label><input id="repo" autocapitalize="off" autocomplete="off"></div>
-    </div>
-    <div class="row">
-      <div><label>分支</label><input id="branch" placeholder="main" autocapitalize="off"></div>
-      <div><label>图片目录</label><input id="dir" placeholder="img" autocapitalize="off"></div>
-    </div>
     <label>访问令牌（只存在本机）</label>
-    <input id="token" type="password" placeholder="github_pat_…" autocomplete="off">
+    <input id="token" type="password" placeholder="粘贴 github_pat_… 后会自动识别仓库" autocomplete="off">
+    <div class="hint" id="detect">只需要填令牌，其余自动识别。</div>
+    <details id="adv">
+      <summary>仓库信息（一般不用动）</summary>
+      <div class="row">
+        <div><label>用户名 / 组织</label><input id="owner" autocapitalize="off" autocomplete="off"></div>
+        <div><label>仓库</label><input id="repo" list="repoList" autocapitalize="off" autocomplete="off"><datalist id="repoList"></datalist></div>
+      </div>
+      <div class="row">
+        <div><label>分支</label><input id="branch" placeholder="main" autocapitalize="off"></div>
+        <div><label>图片目录</label><input id="dir" placeholder="img" autocapitalize="off"></div>
+      </div>
+    </details>
     <label>链接格式</label>
     <select id="linkType">
       <option value="raw">raw.githubusercontent.com（原始）</option>
@@ -94,7 +101,7 @@ input,select{width:100%;font:inherit;color:var(--fg);background:var(--bg);border
       <button class="primary" id="save">保存</button>
       <button id="test">测试连接</button>
     </div>
-    <div class="hint">令牌建议用 Fine-grained token：只勾这一个仓库，权限只给 Contents: Read and write。</div>
+    <div class="hint">令牌用 Fine-grained token：只勾存图的仓库，权限只给 Contents: Read and write。</div>
   </section>
 
   <div class="drop" id="drop">
@@ -129,6 +136,8 @@ let cfg = LS.get('cfg', {});
 function loadCfg(){
   FIELDS.forEach(f => $('#'+f).value = cfg[f] ?? '');
   if(!cfg.linkType) $('#linkType').value = 'raw';
+  if(!cfg.owner){ const g = guessFromHost(); if(g.owner){ $('#owner').value = g.owner; $('#repo').value = g.repo; } }
+  if(cfg.owner) setDetect(`当前：${cfg.owner}/${cfg.repo} · ${cfg.branch || 'main'}`, 'ok');
   $('#compress').checked = !!cfg.compress;
   syncCfgUI();
   if(!cfg.owner || !cfg.repo || !cfg.token) $('#cfg').classList.remove('hidden');
@@ -145,10 +154,42 @@ function syncCfgUI(){
   $('#prefix').classList.toggle('hidden', $('#linkType').value !== 'custom');
   $('#cmpOpts').classList.toggle('hidden', !$('#compress').checked);
 }
+// ---- 自动识别：从网址猜仓库，从令牌拉可写仓库和默认分支 ----
+function guessFromHost(){
+  const m = location.hostname.match(/^([^.]+)\.github\.io$/i);
+  if(!m) return {};
+  const seg = location.pathname.split('/').filter(Boolean)[0];
+  return { owner: m[1], repo: seg || `${m[1]}.github.io` };
+}
+function setDetect(t, cls){ const d = $('#detect'); d.textContent = t; d.className = 'hint ' + (cls || ''); }
+async function autodetect(){
+  const token = $('#token').value.trim();
+  if(!token) return;
+  setDetect('识别中…');
+  try{
+    const r = await gh({ token }, '/user/repos?per_page=100&sort=updated');
+    if(!r.ok) throw new Error(await errText(r));
+    const repos = (await r.json()).filter(x => !x.permissions || x.permissions.push);
+    if(!repos.length) throw new Error('这个令牌没有任何可写的仓库');
+    $('#repoList').innerHTML = repos.map(x => `<option value="${x.name}">`).join('');
+    const cur = `${$('#owner').value}/${$('#repo').value}`.toLowerCase();
+    const g = guessFromHost(); const gk = `${g.owner}/${g.repo}`.toLowerCase();
+    const pick = repos.find(x => x.full_name.toLowerCase() === cur)
+              || repos.find(x => x.full_name.toLowerCase() === gk)
+              || repos[0];
+    $('#owner').value = pick.owner.login; $('#repo').value = pick.name;
+    $('#branch').value = pick.default_branch || 'main';
+    if(!$('#dir').value) $('#dir').value = 'img';
+    const more = repos.length > 1 ? `（令牌能写 ${repos.length} 个仓库，要换就展开下面改）` : '';
+    setDetect(`✓ ${pick.full_name} · ${$('#branch').value}${pick.private ? ' · 注意：私有仓库，外链别人打不开' : ''}${more}`, pick.private ? 'bad' : 'ok');
+  }catch(e){ setDetect('识别失败：' + e.message, 'bad'); }
+}
+$('#token').addEventListener('change', autodetect);
+$('#token').addEventListener('paste', () => setTimeout(autodetect, 50));
 $('#linkType').onchange = syncCfgUI;
 $('#compress').onchange = syncCfgUI;
 $('#toggleCfg').onclick = () => $('#cfg').classList.toggle('hidden');
-$('#save').onclick = () => { cfg = readCfg(); LS.set('cfg', cfg); toast('已保存'); $('#cfg').classList.add('hidden'); };
+$('#save').onclick = async () => { if(!$('#owner').value || !$('#repo').value) await autodetect(); cfg = readCfg(); if(!cfg.owner || !cfg.repo || !cfg.token) return toast('还缺令牌'); LS.set('cfg', cfg); toast('已保存'); $('#cfg').classList.add('hidden'); };
 $('#test').onclick = async () => {
   const c = readCfg();
   try{
