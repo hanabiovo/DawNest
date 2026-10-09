@@ -1,0 +1,341 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#152238">
+<title>鸦巢</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon-192.png?v=3">
+<link rel="apple-touch-icon" href="apple-touch-icon.png?v=3">
+<style>
+:root{
+  --bg:#152238;--card:#1c2b45;--line:#2b3c5a;--fg:#ede6d6;--mute:#8e9bb3;
+  --eye:#ede6d6;--gold:#ede6d6;--ok:#7fc79a;--bad:#e57d7d;--r:14px;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;background:var(--bg);color:var(--fg);
+  font:15px/1.5 system-ui,-apple-system,"PingFang SC","Noto Sans SC",sans-serif}
+main{max-width:560px;margin:0 auto;padding:16px 16px calc(32px + env(safe-area-inset-bottom))}
+header{display:flex;align-items:center;justify-content:space-between;margin:4px 0 16px}
+h1{font-size:20px;margin:0;letter-spacing:.05em}
+h1 small{color:var(--mute);font-weight:400;font-size:12px;margin-left:6px}
+button{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);
+  border-radius:10px;padding:8px 12px;cursor:pointer}
+button:active{transform:scale(.97)}
+button.primary{background:var(--gold);color:#152238;border:none;font-weight:600}
+button.ghost{background:none;border:none;color:var(--mute);padding:6px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px;margin-bottom:14px}
+.drop{border:1.5px dashed var(--line);border-radius:var(--r);padding:28px 12px;text-align:center;
+  color:var(--mute);cursor:pointer;transition:.15s}
+.drop.on{border-color:var(--gold);color:var(--gold)}
+.drop b{display:block;color:var(--fg);font-size:17px;margin-bottom:4px}
+label{display:block;font-size:13px;color:var(--mute);margin:10px 0 4px}
+input,select{width:100%;font:inherit;color:var(--fg);background:var(--bg);border:1px solid var(--line);
+  border-radius:10px;padding:9px 10px}
+.row{display:flex;gap:10px}.row>*{flex:1}
+.check{display:flex;align-items:center;gap:8px;margin-top:10px;color:var(--fg);font-size:14px}
+.check input{width:auto}
+.hint{font-size:12px;color:var(--mute);margin-top:8px}
+.item{display:flex;gap:10px;align-items:center;padding:10px 0;border-top:1px solid var(--line)}
+.item:first-child{border-top:none}
+.thumb{width:56px;height:56px;border-radius:8px;object-fit:cover;background:var(--bg);flex:none}
+.meta{flex:1;min-width:0}
+.name{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.st{font-size:12px;color:var(--mute)}
+.st.ok{color:var(--ok)}.st.bad{color:var(--bad)}
+.bar{height:3px;background:var(--line);border-radius:2px;margin-top:6px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:var(--gold);transition:width .3s}
+.acts{display:flex;gap:6px;flex:none}
+.acts button{padding:6px 9px;font-size:12px}
+.toolbar{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.sec{display:flex;justify-content:space-between;align-items:center;margin-bottom:6px}
+.sec h2{font-size:14px;margin:0;color:var(--mute);font-weight:500}
+.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.grid img{width:100%;aspect-ratio:1;object-fit:cover;border-radius:8px;background:var(--bg);cursor:pointer}
+#toast{position:fixed;left:50%;bottom:calc(28px + env(safe-area-inset-bottom));transform:translateX(-50%) translateY(20px);
+  background:var(--eye);color:#152238;padding:8px 16px;border-radius:20px;font-size:14px;opacity:0;
+  transition:.2s;pointer-events:none;z-index:9}
+#toast.on{opacity:1;transform:translateX(-50%)}
+.hidden{display:none!important}
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>鸦巢<small>GitHub 图床</small></h1>
+    <button class="ghost" id="toggleCfg">设置</button>
+  </header>
+
+  <section class="card hidden" id="cfg">
+    <div class="row">
+      <div><label>用户名 / 组织</label><input id="owner" autocapitalize="off" autocomplete="off"></div>
+      <div><label>仓库</label><input id="repo" autocapitalize="off" autocomplete="off"></div>
+    </div>
+    <div class="row">
+      <div><label>分支</label><input id="branch" placeholder="main" autocapitalize="off"></div>
+      <div><label>图片目录</label><input id="dir" placeholder="img" autocapitalize="off"></div>
+    </div>
+    <label>访问令牌（只存在本机）</label>
+    <input id="token" type="password" placeholder="github_pat_…" autocomplete="off">
+    <label>链接格式</label>
+    <select id="linkType">
+      <option value="raw">raw.githubusercontent.com（原始）</option>
+      <option value="jsd">jsDelivr CDN</option>
+      <option value="custom">自定义前缀</option>
+    </select>
+    <input id="prefix" class="hidden" style="margin-top:8px" placeholder="https://img.example.com/" autocapitalize="off">
+    <label class="check"><input type="checkbox" id="compress"> 上传前压缩为 WebP（GIF 不动）</label>
+    <div class="row" id="cmpOpts">
+      <div><label>最长边 px</label><input id="maxSide" type="number" placeholder="2400"></div>
+      <div><label>质量 0–1</label><input id="quality" type="number" step="0.05" placeholder="0.85"></div>
+    </div>
+    <div class="toolbar">
+      <button class="primary" id="save">保存</button>
+      <button id="test">测试连接</button>
+    </div>
+    <div class="hint">令牌建议用 Fine-grained token：只勾这一个仓库，权限只给 Contents: Read and write。</div>
+  </section>
+
+  <div class="drop" id="drop">
+    <b>选图片</b>点这里 · 也可以粘贴，或从相册「分享到鸦巢」
+    <input type="file" id="file" accept="image/*" multiple hidden>
+  </div>
+
+  <section class="card hidden" id="queueCard" style="margin-top:14px">
+    <div class="sec"><h2>本次上传</h2>
+      <div><button class="ghost" id="copyAllUrl">复制全部链接</button><button class="ghost" id="copyAllMd">全部 MD</button></div>
+    </div>
+    <div id="queue"></div>
+  </section>
+
+  <section class="card" id="histCard" style="margin-top:14px">
+    <div class="sec"><h2>最近上传 · 点图复制链接</h2><button class="ghost" id="clearHist">清空记录</button></div>
+    <div class="grid" id="hist"></div>
+    <div class="hint" id="histEmpty">还没有东西。寒鸦的巢是空的，这不正常。</div>
+  </section>
+</main>
+<div id="toast"></div>
+
+<script>
+const $ = s => document.querySelector(s);
+const LS = {
+  get(k, d){ try{ const v = localStorage.getItem(k); return v == null ? d : JSON.parse(v) }catch{ return d } },
+  set(k, v){ try{ localStorage.setItem(k, JSON.stringify(v)) }catch{} }
+};
+const FIELDS = ['owner','repo','branch','dir','token','linkType','prefix','maxSide','quality'];
+let cfg = LS.get('cfg', {});
+
+function loadCfg(){
+  FIELDS.forEach(f => $('#'+f).value = cfg[f] ?? '');
+  if(!cfg.linkType) $('#linkType').value = 'raw';
+  $('#compress').checked = !!cfg.compress;
+  syncCfgUI();
+  if(!cfg.owner || !cfg.repo || !cfg.token) $('#cfg').classList.remove('hidden');
+}
+function readCfg(){
+  const c = {};
+  FIELDS.forEach(f => c[f] = $('#'+f).value.trim());
+  c.compress = $('#compress').checked;
+  c.branch ||= 'main';
+  c.dir = (c.dir || 'img').replace(/^\/+|\/+$/g,'');
+  return c;
+}
+function syncCfgUI(){
+  $('#prefix').classList.toggle('hidden', $('#linkType').value !== 'custom');
+  $('#cmpOpts').classList.toggle('hidden', !$('#compress').checked);
+}
+$('#linkType').onchange = syncCfgUI;
+$('#compress').onchange = syncCfgUI;
+$('#toggleCfg').onclick = () => $('#cfg').classList.toggle('hidden');
+$('#save').onclick = () => { cfg = readCfg(); LS.set('cfg', cfg); toast('已保存'); $('#cfg').classList.add('hidden'); };
+$('#test').onclick = async () => {
+  const c = readCfg();
+  try{
+    const r = await gh(c, `/repos/${c.owner}/${c.repo}`);
+    if(!r.ok) throw new Error(await errText(r));
+    const j = await r.json();
+    if(j.private) toast('连上了，但仓库是私有的：raw 外链别人打不开');
+    else if(j.permissions && !j.permissions.push) toast('能读不能写，令牌权限不够');
+    else toast('连上了，可以写');
+  }catch(e){ toast('失败：' + e.message) }
+};
+
+function toast(msg){
+  const t = $('#toast'); t.textContent = msg; t.classList.add('on');
+  clearTimeout(toast._t); toast._t = setTimeout(() => t.classList.remove('on'), 2200);
+}
+
+function gh(c, path, opt = {}, ms = 90000){
+  const ctl = new AbortController(); const tm = setTimeout(() => ctl.abort(), ms);
+  return fetch('https://api.github.com' + path, {
+    ...opt, signal: ctl.signal,
+    headers: { 'Authorization': 'Bearer ' + c.token, 'Accept': 'application/vnd.github+json',
+               'X-GitHub-Api-Version': '2022-11-28', ...(opt.headers || {}) }
+  }).finally(() => clearTimeout(tm));
+}
+async function errText(r){
+  let m = ''; try{ m = (await r.json()).message }catch{}
+  const map = {401:'令牌无效或过期', 403:'没权限（或触发限流）', 404:'找不到仓库/分支，或令牌看不到它', 409:'分支冲突', 422:'同名文件已存在'};
+  return `${r.status} ${map[r.status] || ''} ${m}`.trim();
+}
+
+const pad = n => String(n).padStart(2,'0');
+function makePath(c, ext){
+  const d = new Date();
+  const stamp = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}-${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}`;
+  const rnd = Math.random().toString(36).slice(2,6);
+  return `${c.dir}/${d.getFullYear()}/${pad(d.getMonth()+1)}/${stamp}-${rnd}.${ext}`;
+}
+function linkFor(c, path){
+  const p = path.split('/').map(encodeURIComponent).join('/');
+  if(c.linkType === 'jsd') return `https://cdn.jsdelivr.net/gh/${c.owner}/${c.repo}@${c.branch}/${p}`;
+  if(c.linkType === 'custom' && c.prefix) return c.prefix.replace(/\/?$/,'/') + p;
+  return `https://raw.githubusercontent.com/${c.owner}/${c.repo}/${c.branch}/${p}`;
+}
+const extOf = f => (f.type.split('/')[1] || f.name.split('.').pop() || 'png').replace('jpeg','jpg').replace('svg+xml','svg').toLowerCase();
+
+async function compress(c, file){
+  if(!c.compress || /gif|svg/.test(file.type)) return file;
+  const max = +c.maxSide || 2400, q = +c.quality || 0.85;
+  const bmp = await createImageBitmap(file, { imageOrientation: 'from-image' });
+  const k = Math.min(1, max / Math.max(bmp.width, bmp.height));
+  const cv = document.createElement('canvas');
+  cv.width = Math.round(bmp.width * k); cv.height = Math.round(bmp.height * k);
+  cv.getContext('2d').drawImage(bmp, 0, 0, cv.width, cv.height);
+  const blob = await new Promise(r => cv.toBlob(r, 'image/webp', q));
+  return blob && blob.size < file.size ? new File([blob], 'x.webp', { type: 'image/webp' }) : file;
+}
+const toB64 = blob => new Promise((res, rej) => {
+  const fr = new FileReader();
+  fr.onload = () => res(fr.result.slice(fr.result.indexOf(',') + 1));
+  fr.onerror = () => rej(fr.error); fr.readAsDataURL(blob);
+});
+
+// ---- 队列：串行上传，避免并发提交互相冲突 ----
+const jobs = []; let running = false;
+
+function addFiles(list){
+  const files = [...list].filter(f => f.type.startsWith('image/'));
+  if(!files.length) return;
+  cfg = LS.get('cfg', {});
+  if(!cfg.owner || !cfg.repo || !cfg.token){ $('#cfg').classList.remove('hidden'); toast('先填设置'); return; }
+  $('#queueCard').classList.remove('hidden');
+  files.forEach(f => {
+    const job = { file: f, el: renderJob(f), url: '' };
+    jobs.push(job); job.state = 'wait';
+  });
+  pump();
+}
+function renderJob(f){
+  const el = document.createElement('div'); el.className = 'item';
+  el.innerHTML = `<img class="thumb"><div class="meta"><div class="name"></div><div class="st">排队中</div><div class="bar"><i></i></div></div><div class="acts"></div>`;
+  el.querySelector('.thumb').src = URL.createObjectURL(f);
+  el.querySelector('.name').textContent = f.name || '粘贴的图片';
+  $('#queue').prepend(el); return el;
+}
+function setJob(job, text, cls, pct){
+  const st = job.el.querySelector('.st'); st.textContent = text; st.className = 'st ' + (cls || '');
+  if(pct != null) job.el.querySelector('.bar i').style.width = pct + '%';
+}
+async function pump(){
+  if(running) return; running = true;
+  let job;
+  while((job = jobs.find(j => j.state === 'wait'))){ job.state = 'run'; await upload(job); }
+  running = false;
+}
+async function upload(job){
+  const c = cfg;
+  try{
+    setJob(job, '处理中…', '', 15);
+    const blob = await compress(c, job.file);
+    const b64 = await toB64(blob);
+    let tries = 0;
+    while(true){
+      tries++;
+      const path = makePath(c, extOf(blob));
+      setJob(job, tries > 1 ? `重试第 ${tries - 1} 次…` : '上传中…', '', 55);
+      const r = await gh(c, `/repos/${c.owner}/${c.repo}/contents/${path.split('/').map(encodeURIComponent).join('/')}`, {
+        method: 'PUT',
+        body: JSON.stringify({ message: `upload ${path.split('/').pop()}`, content: b64, branch: c.branch })
+      });
+      if(r.ok){
+        job.url = linkFor(c, path); job.state = 'done';
+        setJob(job, `完成 · ${(blob.size/1024).toFixed(0)} KB`, 'ok', 100);
+        job.el.querySelector('.acts').innerHTML = `<button data-a="url">链接</button><button data-a="md">MD</button>`;
+        job.el.querySelector('.acts').onclick = e => {
+          const a = e.target.dataset.a; if(a) copy(a === 'md' ? md(job.url) : job.url);
+        };
+        pushHist({ url: job.url, path, t: Date.now() });
+        if(jobs.filter(j => j.state === 'wait' || j.state === 'run').length === 1) copy(job.url, true);
+        return;
+      }
+      // 409 分支被别的提交抢先；422 同名；5xx 服务器抽风 —— 都值得再来
+      if((r.status === 409 || r.status === 422 || r.status >= 500) && tries < 4){
+        await new Promise(s => setTimeout(s, 800 * tries)); continue;
+      }
+      throw new Error(await errText(r));
+    }
+  }catch(e){
+    job.state = 'fail';
+    const msg = e.name === 'AbortError' ? '超时（切后台或网络慢）' : (e.message || '网络错误');
+    setJob(job, '失败：' + msg, 'bad', 0);
+    const acts = job.el.querySelector('.acts');
+    acts.innerHTML = `<button>重试</button>`;
+    acts.onclick = () => { acts.innerHTML = ''; job.state = 'wait'; setJob(job, '排队中', '', 0); pump(); };
+  }
+}
+
+const md = u => `![](${u})`;
+async function copy(text, silent){
+  try{ await navigator.clipboard.writeText(text); }
+  catch{
+    const ta = document.createElement('textarea'); ta.value = text; document.body.append(ta);
+    ta.select(); document.execCommand('copy'); ta.remove();
+  }
+  toast(silent ? '上传完成，链接已复制' : '已复制');
+}
+$('#copyAllUrl').onclick = () => { const u = jobs.filter(j => j.url).map(j => j.url); u.length ? copy(u.join('\n')) : toast('还没有完成的') };
+$('#copyAllMd').onclick = () => { const u = jobs.filter(j => j.url).map(j => md(j.url)); u.length ? copy(u.join('\n')) : toast('还没有完成的') };
+
+// ---- 历史 ----
+function pushHist(h){ const a = LS.get('hist', []); a.unshift(h); LS.set('hist', a.slice(0, 80)); renderHist(); }
+function renderHist(){
+  const a = LS.get('hist', []); const g = $('#hist'); g.innerHTML = '';
+  $('#histEmpty').classList.toggle('hidden', a.length > 0);
+  a.forEach(h => {
+    const im = document.createElement('img'); im.loading = 'lazy'; im.src = h.url; im.alt = h.path;
+    im.onclick = () => copy(h.url);
+    im.oncontextmenu = e => { e.preventDefault(); copy(md(h.url)); };
+    g.append(im);
+  });
+}
+$('#clearHist').onclick = () => { LS.set('hist', []); renderHist(); toast('记录清了（仓库里的图还在）'); };
+
+// ---- 入口：点选 / 拖放 / 粘贴 / 分享 ----
+const drop = $('#drop');
+drop.onclick = () => $('#file').click();
+$('#file').onchange = e => { addFiles(e.target.files); e.target.value = ''; };
+drop.ondragover = e => { e.preventDefault(); drop.classList.add('on'); };
+drop.ondragleave = () => drop.classList.remove('on');
+drop.ondrop = e => { e.preventDefault(); drop.classList.remove('on'); addFiles(e.dataTransfer.files); };
+addEventListener('paste', e => addFiles([...e.clipboardData.items].map(i => i.getAsFile()).filter(Boolean)));
+
+async function takeShared(){
+  if(!location.search.includes('shared')) return;
+  history.replaceState(null, '', './');
+  const cache = await caches.open('yachao-share');
+  const keys = await cache.keys(); const files = [];
+  for(const k of keys){
+    const r = await cache.match(k); const b = await r.blob();
+    files.push(new File([b], decodeURIComponent(r.headers.get('x-name') || 'image'), { type: b.type }));
+    await cache.delete(k);
+  }
+  addFiles(files);
+}
+
+if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js');
+loadCfg(); renderHist(); takeShared();
+</script>
+</body>
+</html>
